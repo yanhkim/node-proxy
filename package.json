@@ -1,0 +1,16 @@
+{
+  "author": "Namhoon Kim <yanhkim@gmail.com>",
+  "name": "filtered-proxy",
+  "description": "http proxy that offer mime based hook to modify original stream",
+  "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/yanhkim/node-proxy.git"
+  },
+  "main": "http_proxy",
+  "engines": {
+    "node": "~0.6.0"
+  },
+  "dependencies": {},
+  "devDependencies": {}
+}
