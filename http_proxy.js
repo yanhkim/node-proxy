@@ -25,6 +25,21 @@ const DEBUG = process.env.NODE_DEBUG ? true : false;
 
 var log = DEBUG ? require('./log').logger('proxy', { timestamp: true }) : function() {};
 
+var emitter = require('events').EventEmitter
+  , util = require('util');
+
+function Proxy() {
+    emitter.call(this);
+}
+
+util.inherits(Proxy, emitter);
+
+var proxy = exports.proxy = new Proxy();
+
+function hasHandler(mime) {
+    return !!(mime && proxy.listeners(mime).length);
+}
+
 var http = require('http')
   , url = require('url');
 
@@ -40,17 +55,49 @@ var server = http.createServer(function(req, res) {
     // create remote request
     var rreq = http.request(options, function(rres) {
         log('>>> [' + req.url + '] begin');
+        var contentType = rres.headers['content-type'];
+        
+        var mime, encoding;
+        if (contentType) {
+            mime = contentType.match(/\w+\/\w+/).toString();
+            encoding = contentType.match(/charset=([^;]+)/i);
+            encoding = encoding ? encoding[1] : undefined;
+        }
+
         // deliver remote server's header, data, end event to proxy user
         res.writeHead(rres.statusCode, rres.headers);
 
         rres.on('data', function(chunk) {
             log('>>> [' + req.url + '] body received:', chunk.length);
-            res.write(chunk);
+
+            if (hasHandler(mime)) {
+                proxy.emit(mime, {
+                    url: req.url
+                  , encoding: encoding
+                  , which: 'stream'
+                  , data: chunk
+                }, function(filtered) {
+                    res.write(filtered);
+                });
+            } else {
+                res.write(chunk);
+            }
         });
 
         rres.on('end', function() {
             log('>>> [' + req.url + '] end');
-            res.end();
+
+            if (hasHandler(mime)) {
+                proxy.emit(mime, {
+                    url: req.url
+                  , encoding: encoding
+                  , which: 'end'
+                }, function(filtered) {
+                    filtered ? res.end(filtered) : res.end();
+                });
+            } else {
+                res.end();
+            }
         });
     });
 
@@ -69,3 +116,4 @@ var server = http.createServer(function(req, res) {
 server.listen(PORT, function() {
     log('proxy server running on port:', PORT);
 });
+
