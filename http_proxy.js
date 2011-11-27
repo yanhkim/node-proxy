@@ -20,47 +20,52 @@
  THE SOFTWARE.
 */
 
-var sys = require('sys'),
-    http = require('http');
+const PORT = process.env.PORT || 8000;
+const DEBUG = process.env.NODE_DEBUG ? true : false;
 
-var server = http.createServer(function (client_request, client_resp) {
-  //sys.puts(sys.inspect(client_request.headers));
+var log = DEBUG ? require('./log').logger('proxy', { timestamp: true }) : function() {};
 
-  var host;
-  var path;
+var http = require('http')
+  , url = require('url');
 
-  client_request.url.replace(/http:\/\/([^\/]*)(.*)/, function(m, h, p) {
-    host = h;
-    path = p;
-  });
+var server = http.createServer(function(req, res) {
+    log('<<< [' + req.url + '] begin');
+    // parse request to proxy
+    var purl = url.parse(req.url);
 
-  path = path || '/';
+    var options = purl;
+    options.headers = req.header;
+    options.method = req.method;
 
-  //sys.puts(client_request.method + " " + host + " " + path);
-  var foreign_host = http.createClient(80, host);
-  var request = foreign_host.request(client_request.method, path, client_request.headers);
+    // create remote request
+    var rreq = http.request(options, function(rres) {
+        log('>>> [' + req.url + '] begin');
+        // deliver remote server's header, data, end event to proxy user
+        res.writeHead(rres.statusCode, rres.headers);
 
-  client_request.addListener("body", function (chunk) {
-    request.sendBody(chunk);
+        rres.on('data', function(chunk) {
+            log('>>> [' + req.url + '] body received:', chunk.length);
+            res.write(chunk);
+        });
 
-  });
-
-  client_request.addListener("complete", function () {
-    request.finish(function (foreign_response) {
-      //sys.puts("STATUS: " + foreign_response.statusCode);
-      //sys.puts("HEADERS: " + JSON.stringify(foreign_response.headers));
-
-      client_resp.sendHeader(foreign_response.statusCode, foreign_response.headers);
-      foreign_response.addListener("body", function (chunk) {
-        client_resp.sendBody(chunk, "binary");
-      });
-      foreign_response.addListener("complete", function (chunk) {
-        client_resp.finish();
-      });
+        rres.on('end', function() {
+            log('>>> [' + req.url + '] end');
+            res.end();
+        });
     });
-  });
+
+    // if receive http body or end sign, pass it to remote server
+    req.on('data', function(chunk) {
+        log('<<< [' + req.url + '] body received:', chunk.length);
+        rreq.write(chunk);
+    });
+
+    req.on('end', function() {
+        log('<<< [' + req.url + '] end');
+        rreq.end();
+    });
 });
 
-server.listen(8000);
-sys.puts('Server running at http://127.0.0.1:8000/');
-
+server.listen(PORT, function() {
+    log('proxy server running on port:', PORT);
+});
