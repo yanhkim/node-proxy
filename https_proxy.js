@@ -20,7 +20,7 @@
  THE SOFTWARE.
 */
 
-var sys = require('sys'),
+var util = require('util'),
     tcp = require('tcp'),
     dns = require('dns');
 
@@ -54,13 +54,13 @@ var server = tcp.createServer(function (socket) {
         var match = connect.match("CONNECT +([^:]+):([0-9]+).*");
         host = match[1];
         port = match[2];
-        //sys.debug("connect " + host + " " + port);
+        //util.debug("connect " + host + " " + port);
 
         var resolution = dns.resolve4(host);
 
         resolution.addCallback(function (addresses, ttl, cname) {
           server = addresses[0];
-          //sys.debug("server: " + server);
+          //util.debug("server: " + server);
 
           connection = tcp.createConnection(port, server);
           connection.setEncoding("binary");
@@ -92,4 +92,4 @@ var server = tcp.createServer(function (socket) {
 
 server.listen(8001, "localhost");
 
-sys.puts('Server running at http://127.0.0.1:8001/');
+util.puts('Server running at http://127.0.0.1:8001/');
